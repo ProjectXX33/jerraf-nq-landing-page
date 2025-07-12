@@ -60,7 +60,7 @@ const QuickOrderSection: React.FC = () => {
       name: 'إن كيو أرجيتون أقراص 30 قرص',
       description: 'تركيز أعلى وتفوّق دراسي مضمون - مكمل الأرجنين الفعال لتعزيز الذاكرة والتركيز وزيادة التحصيل الدراسي',
       price: 75,
-      image: '/lovable-uploads/NQ Argitone Tabs - Box & Jar.jpg'
+      image: '/NQ Argitone Tabs - Box & Jar.jpg'
     }
   ];
 

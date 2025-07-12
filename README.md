@@ -1,73 +1,76 @@
-# Welcome to your Lovable project
+# NQ Argitone Landing Page
 
-## Project info
+This is a React-based landing page for NQ Argitone, a natural growth supplement for children.
 
-**URL**: https://lovable.dev/projects/9b11425f-63e8-409a-a638-409d255f7ebd
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend**: React 18 with TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: Shadcn/ui
+- **Build Tool**: Vite
+- **Routing**: React Router
+- **State Management**: TanStack Query
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/9b11425f-63e8-409a-a638-409d255f7ebd) and start prompting.
+- Node.js (version 16 or higher)
+- npm or yarn
 
-Changes made via Lovable will be committed automatically to this repo.
+### Installation
 
-**Use your preferred IDE**
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd Arg
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. Install dependencies:
+```bash
+npm install
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+3. Start the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+4. Open [http://localhost:8080](http://localhost:8080) to view it in the browser.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+```
+src/
+├── components/          # React components
+│   ├── ui/             # Reusable UI components
+│   └── ...             # Feature-specific components
+├── hooks/              # Custom React hooks
+├── lib/                # Utility functions
+├── pages/              # Page components
+├── services/           # API services
+├── types/              # TypeScript type definitions
+└── utils/              # Helper utilities
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Available Scripts
 
-## What technologies are used for this project?
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run build:dev` - Build with development mode
+- `npm run lint` - Run ESLint
+- `npm run preview` - Preview production build
 
-This project is built with:
+## Features
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Responsive design optimized for mobile and desktop
+- Arabic RTL support
+- Product showcase with interactive elements
+- Growth system with personalized reports
+- WooCommerce integration for orders
+- FAQ accordion
+- Animated sections and transitions
 
-## How can I deploy this project?
+## License
 
-Simply open [Lovable](https://lovable.dev/projects/9b11425f-63e8-409a-a638-409d255f7ebd) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Private project for NQ Argitone.

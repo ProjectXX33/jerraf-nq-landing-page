@@ -13,7 +13,7 @@ const FinalCTASection = () => {
 
         <div className="h-full flex items-center justify-end">
           <img 
-            src="/lovable-uploads/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
+            src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
             alt="Argitone Tall Giraffe" 
             className="h-full w-auto object-contain transform scale-150 lg:scale-140 hover:scale-130 lg:hover:scale-145 transition-transform duration-500" 
           />
@@ -26,15 +26,15 @@ const FinalCTASection = () => {
           <div className="max-w-4xl md:ml-auto lg:ml-auto">
             <div className="animate-fade-in-up text-center">
               <h2 className="text-4xl lg:text-6xl font-bold text-white mb-6 leading-tight text-center">
-                ابدئي الآن رحلة طفلك
+                ابدأ الآن رحلة طفلك
                 <span className="block text-jerraf-yellow mt-2">
                   نحو نمو صحي وطول مثالي!
                 </span>
               </h2>
               
               <p className="text-xl text-white/90 mb-12 leading-relaxed max-w-3xl mx-auto text-center">
-                لا تتردي في منح طفلك أفضل بداية لمستقبل صحي ومشرق. 
-                آلاف الأمهات اخترن إن كيو أرجيتون لأطفالهن
+                لا تتردد في منح طفلك أفضل بداية لمستقبل صحي ومشرق. 
+                آلاف الآباء والأمهات اختاروا إن كيو أرجيتون لأطفالهم
               </p>
 
               {/* Features Highlights */}
@@ -58,7 +58,7 @@ const FinalCTASection = () => {
                   <div className="flex items-center justify-center gap-4 mb-6">
                     <span className="text-3xl font-bold text-jerraf-purple">75 ريال</span>
                     <span className="text-xl text-gray-500 line-through">150 ريال</span>
-                    <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">وفري 75 ريال</span>
+                    <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">وفر 75 ريال</span>
                   </div>
                   
                   <Button 
@@ -71,7 +71,7 @@ const FinalCTASection = () => {
                       }
                     }}
                   >
-                    اطلبي الآن
+                    اطلب الآن
                   </Button>
                   
                   <p className="text-gray-600 text-sm mt-4">
@@ -103,7 +103,7 @@ const FinalCTASection = () => {
       {/* Mobile Giraffe - Bigger and Optimized (Same as Hero) */}
       <div className="absolute top-[340px] right-2 md:hidden">
         <img 
-          src="/lovable-uploads/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
+          src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
           alt="Argitone Tall Giraffe" 
           className="h-64 w-auto object-contain transform rounded-xl" 
           style={{ transform: 'scale(5)' }}

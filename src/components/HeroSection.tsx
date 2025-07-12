@@ -12,7 +12,7 @@ const HeroSection = () => {
       <div className="absolute -right-20 md:-right-20 lg:-right-64 top-16 md:top-44 h-full w-72 md:w-96 lg:w-[480px] hidden md:block z-20">
         <div className="h-full flex items-center justify-end">
           <img 
-            src="/lovable-uploads/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
+            src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
             alt="Argitone Tall Giraffe" 
             className="h-full w-auto object-contain transform scale-125 lg:scale-140 hover:scale-130 lg:hover:scale-145 transition-transform duration-500" 
           />
@@ -56,7 +56,7 @@ const HeroSection = () => {
                   }
                 }}
               >
-                اطلبي الآن
+                اطلب الآن
               </Button>
             </div>
 
@@ -67,7 +67,7 @@ const HeroSection = () => {
                 <div className="relative group">
                   <div className="bg-white/20 backdrop-blur-sm rounded-2xl md:rounded-3xl p-2 md:p-4 shadow-xl md:shadow-2xl hover:shadow-3xl transition-all duration-500 border border-white/30">
                     <img 
-                      src="/lovable-uploads/a8a3ec41-a92f-4541-a5a3-8b88a96a60ef.png" 
+                      src="/a8a3ec41-a92f-4541-a5a3-8b88a96a60ef.png" 
                       alt="NQ Argitone Syrup" 
                       className="w-28 md:w-40 h-32 md:h-48 object-contain rounded-2xl md:rounded-3xl transform hover:scale-105 transition-transform duration-500"
                     />
@@ -90,7 +90,7 @@ const HeroSection = () => {
                 <div className="relative group">
                   <div className="bg-white/20 backdrop-blur-sm rounded-2xl md:rounded-3xl p-2 md:p-4 shadow-xl md:shadow-2xl hover:shadow-3xl transition-all duration-500 border border-white/30">
                     <img 
-                      src="/lovable-uploads/NQ Argitone Tabs - Box & Jar.jpg" 
+                      src="/NQ Argitone Tabs - Box & Jar.jpg" 
                       alt="NQ Argitone Tablets" 
                       className="w-28 md:w-40 h-32 md:h-48 object-contain rounded-2xl md:rounded-3xl transform hover:scale-105 transition-transform duration-500"
                     />
@@ -139,7 +139,7 @@ const HeroSection = () => {
       {/* Mobile Giraffe - Bigger and Optimized */}
       <div className="absolute top-[400px] right-2 md:hidden">
         <img 
-          src="/lovable-uploads/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
+          src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
           alt="Argitone Tall Giraffe" 
           className="h-64 w-auto object-contain transform rounded-xl" style={{ transform: 'scale(5)' }}
 
