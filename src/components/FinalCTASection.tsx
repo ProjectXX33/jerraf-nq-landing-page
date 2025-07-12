@@ -101,7 +101,7 @@ const FinalCTASection = () => {
       </div>
 
       {/* Mobile Giraffe - Bigger and Optimized (Same as Hero) */}
-      <div className="absolute top-[340px] right-2 md:hidden">
+      <div className="absolute top-[305px] right-2 md:hidden">
         <img 
           src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
           alt="Argitone Tall Giraffe" 

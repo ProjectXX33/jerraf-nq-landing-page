@@ -8,6 +8,37 @@ const HeroSection = () => {
       {/* Curved Background */}
       <div className="absolute inset-0 bg-jerraf-yellow jerraf-curve"></div>
       
+      {/* Logo - Top Left - Mobile & Desktop Optimized */}
+      <div className="absolute top-2 left-5 md:top-6 md:left-6 lg:top-8 lg:left-8 z-30">
+        {/* Mobile Logo - NQ-ICON.png */}
+        <a 
+          href="https://nooralqmar.com/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block md:hidden hover:scale-105 transition-transform duration-300"
+        >
+          <img 
+            src="/NQ-ICON.png" 
+            alt="NQ Logo" 
+            className="h-10 sm:h-10 w-auto object-contain"
+          />
+        </a>
+        
+        {/* Desktop Logo - logo_color.png with white background */}
+        <a 
+          href="https://nooralqmar.com/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hidden md:block bg-white rounded-lg shadow-md p-2 hover:shadow-lg hover:scale-105 transition-all duration-300"
+        >
+          <img 
+            src="/logo_color.png" 
+            alt="NQ Logo" 
+            className="h-10 lg:h-12 w-auto object-contain"
+          />
+        </a>
+      </div>
+      
       {/* Much Bigger Giraffe Image - Right Side with lower positioning */}
       <div className="absolute -right-20 md:-right-20 lg:-right-64 top-16 md:top-44 h-full w-72 md:w-96 lg:w-[480px] hidden md:block z-20">
         <div className="h-full flex items-center justify-end">
@@ -137,7 +168,7 @@ const HeroSection = () => {
       </div>
 
       {/* Mobile Giraffe - Bigger and Optimized */}
-      <div className="absolute top-[400px] right-2 md:hidden">
+      <div className="absolute top-[500px] right-2 md:hidden">
         <img 
           src="/67c84c09-6d45-4d7f-9ae4-fa0010bc04c2.png" 
           alt="Argitone Tall Giraffe" 
