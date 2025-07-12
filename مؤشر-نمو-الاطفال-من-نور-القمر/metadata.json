@@ -1,6 +1,0 @@
-{
-  "name": "مؤشر نمو الاطفال من نور القمر",
-  "description": "An AI-powered application from Nour Al-Qamar to track and analyze a child's growth based on their age, gender, weight, and height. It provides a detailed report with status, summary, and expert recommendations in Arabic.",
-  "requestFramePermissions": [],
-  "prompt": ""
-}
