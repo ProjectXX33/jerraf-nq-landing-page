@@ -8,6 +8,8 @@ const HeroSection = () => {
       {/* Curved Background */}
       <div className="absolute inset-0 bg-jerraf-yellow jerraf-curve"></div>
       
+
+
       {/* Logo - Top Left - Mobile & Desktop Optimized */}
       <div className="absolute top-2 left-5 md:top-6 md:left-6 lg:top-8 lg:left-8 z-30">
         {/* Mobile Logo - NQ-ICON.png */}

@@ -123,6 +123,48 @@ const QuickOrderSection: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate required form fields
+    if (!formData.firstName.trim()) {
+      alert('يرجى إدخال الاسم الأول');
+      return;
+    }
+    
+    if (!formData.lastName.trim()) {
+      alert('يرجى إدخال اسم العائلة');
+      return;
+    }
+    
+    if (!formData.phone.trim()) {
+      alert('يرجى إدخال رقم الهاتف');
+      return;
+    }
+    
+    if (!formData.city.trim()) {
+      alert('يرجى إدخال المدينة');
+      return;
+    }
+    
+    if (!formData.address.trim()) {
+      alert('يرجى إدخال العنوان التفصيلي');
+      return;
+    }
+    
+    // Validate phone number format (basic validation)
+    const phoneRegex = /^[0-9+\-\s()]+$/;
+    if (!phoneRegex.test(formData.phone)) {
+      alert('يرجى إدخال رقم هاتف صحيح');
+      return;
+    }
+    
+    // Validate email format if provided
+    if (formData.email && formData.email.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        alert('يرجى إدخال بريد إلكتروني صحيح');
+        return;
+      }
+    }
+    
     if (!hasItems) {
       alert('يرجى اختيار منتج واحد على الأقل');
       return;
