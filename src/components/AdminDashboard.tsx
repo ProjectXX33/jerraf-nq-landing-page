@@ -3,6 +3,7 @@ import { AdminUtils } from '../utils/adminUtils';
 import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
 import { wooCommerceService } from '../services/woocommerceService';
+import { useGrowthSystem, formatTimeRemaining } from '../contexts/GrowthSystemContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -54,15 +55,15 @@ interface Order {
 }
 
 const AdminDashboard: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(AdminUtils.isLoggedIn());
+  // Use the growth system context for real-time state
+  const { settings: growthSettings, login, logout, getSessionInfo, toggleGrowthSystem } = useGrowthSystem();
+  
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState('');
-  const [growthSystemEnabled, setGrowthSystemEnabled] = useState(AdminUtils.isGrowthSystemEnabled());
-  const [sessionInfo, setSessionInfo] = useState(AdminUtils.getSessionInfo());
   const [activeTab, setActiveTab] = useState<'orders' | 'customers'>('orders');
   const [customerGrowthStats, setCustomerGrowthStats] = useState(CustomerGrowthUtils.getStatistics());
   const [onlyFormOrders, setOnlyFormOrders] = useState(true);
@@ -72,30 +73,14 @@ const AdminDashboard: React.FC = () => {
     reason: ''
   });
   const [orderGrowthStats, setOrderGrowthStats] = useState(OrderGrowthUtils.getStatistics());
+  
+  // Get real-time values from context
+  const isLoggedIn = growthSettings.isAdminLoggedIn;
+  const growthSystemEnabled = growthSettings.isEnabled;
+  const sessionInfo = getSessionInfo();
 
-  // Update session info every minute
+  // Listen for customer settings changes (no longer need admin settings changes since using context)
   useEffect(() => {
-    if (!isLoggedIn) return;
-
-    const interval = setInterval(() => {
-      const info = AdminUtils.getSessionInfo();
-      setSessionInfo(info);
-      
-      if (!info.isValid) {
-        setIsLoggedIn(false);
-      }
-    }, 60000); // Update every minute
-
-    return () => clearInterval(interval);
-  }, [isLoggedIn]);
-
-  // Listen for admin settings changes
-  useEffect(() => {
-    const handleSettingsChange = () => {
-      setIsLoggedIn(AdminUtils.isLoggedIn());
-      setGrowthSystemEnabled(AdminUtils.isGrowthSystemEnabled());
-    };
-
     const handleCustomerSettingsChange = () => {
       setCustomerGrowthStats(CustomerGrowthUtils.getStatistics());
     };
@@ -118,13 +103,11 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
-    window.addEventListener('adminSettingsChanged', handleSettingsChange);
     window.addEventListener('customerGrowthSettingsChanged', handleCustomerSettingsChange);
     window.addEventListener('orderGrowthAccessChanged', handleOrderGrowthAccessChange);
     window.addEventListener('orderStatusUpdated', handleOrderStatusUpdated);
     
     return () => {
-      window.removeEventListener('adminSettingsChanged', handleSettingsChange);
       window.removeEventListener('customerGrowthSettingsChanged', handleCustomerSettingsChange);
       window.removeEventListener('orderGrowthAccessChanged', handleOrderGrowthAccessChange);
       window.removeEventListener('orderStatusUpdated', handleOrderStatusUpdated);
@@ -141,18 +124,15 @@ const AdminDashboard: React.FC = () => {
   const handleLogin = () => {
     setLoginError('');
     
-    if (AdminUtils.login(password)) {
-      setIsLoggedIn(true);
+    if (login(password)) {
       setPassword('');
-      setSessionInfo(AdminUtils.getSessionInfo());
     } else {
       setLoginError('كلمة المرور غير صحيحة');
     }
   };
 
   const handleLogout = () => {
-    AdminUtils.logout();
-    setIsLoggedIn(false);
+    logout();
     setPassword('');
     setOrders([]);
   };
@@ -248,8 +228,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleGrowthSystemToggle = (enabled: boolean) => {
-    AdminUtils.toggleGrowthSystem(enabled);
-    setGrowthSystemEnabled(enabled);
+    toggleGrowthSystem(enabled);
   };
 
   const getStatusBadge = (status: string) => {
@@ -395,7 +374,7 @@ const AdminDashboard: React.FC = () => {
                 {sessionInfo.isValid && (
                   <div className="text-sm text-gray-600">
                     <Clock className="w-4 h-4 inline ml-1" />
-                    باقي من الجلسة: {AdminUtils.formatTimeRemaining(sessionInfo.timeRemaining)}
+                    باقي من الجلسة: {formatTimeRemaining(sessionInfo.timeRemaining)}
                   </div>
                 )}
                 <Button variant="outline" onClick={handleLogout}>

@@ -9,8 +9,12 @@ import { PurchaseUtils } from '../utils/purchaseUtils';
 import { AdminUtils } from '../utils/adminUtils';
 import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
+import { useGrowthSystem } from '../contexts/GrowthSystemContext';
 
 const GrowthSystemSection: React.FC = () => {
+  // Use the growth system context for real-time state
+  const { settings: growthSettings } = useGrowthSystem();
+  
   const [formData, setFormData] = useState<FormData>({
     name: '',
     gender: Gender.MALE,
@@ -25,12 +29,14 @@ const GrowthSystemSection: React.FC = () => {
   const [hasPurchased, setHasPurchased] = useState<boolean>(false);
   const [usageStats, setUsageStats] = useState({ total: 0, used: 0, remaining: 0 });
   const [showExhaustedState, setShowExhaustedState] = useState<boolean>(false);
-  const [isAdminLocked, setIsAdminLocked] = useState<boolean>(!AdminUtils.isGrowthSystemEnabled());
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [isCustomerBlocked, setIsCustomerBlocked] = useState<boolean>(false);
   const [orderBasedUsage, setOrderBasedUsage] = useState({ canUse: false, availableUsages: 0, enabledOrders: [] });
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [orderCheckError, setOrderCheckError] = useState<string>('');
+  
+  // Get admin lock status directly from context (real-time)
+  const isAdminLocked = !growthSettings.isEnabled;
 
   // Check purchase status on component mount
   useEffect(() => {
@@ -82,10 +88,7 @@ const GrowthSystemSection: React.FC = () => {
       updateStatus();
     };
 
-    // Listen for admin growth system toggle
-    const handleGrowthSystemToggled = (event: any) => {
-      setIsAdminLocked(!event.detail.enabled);
-    };
+    // Growth system toggle is now handled by context - no event listener needed
 
     // Listen for customer growth settings changes
     const handleCustomerGrowthSettingsChanged = () => {
@@ -109,7 +112,6 @@ const GrowthSystemSection: React.FC = () => {
     window.addEventListener('purchaseCompleted', handlePurchaseCompleted);
     window.addEventListener('purchaseReset', handlePurchaseReset);
     window.addEventListener('growthSystemUsed', handleGrowthSystemUsed);
-    window.addEventListener('growthSystemToggled', handleGrowthSystemToggled);
     window.addEventListener('customerGrowthSettingsChanged', handleCustomerGrowthSettingsChanged);
     window.addEventListener('orderGrowthAccessChanged', handleOrderGrowthAccessChanged);
 
@@ -117,7 +119,6 @@ const GrowthSystemSection: React.FC = () => {
       window.removeEventListener('purchaseCompleted', handlePurchaseCompleted);
       window.removeEventListener('purchaseReset', handlePurchaseReset);
       window.removeEventListener('growthSystemUsed', handleGrowthSystemUsed);
-      window.removeEventListener('growthSystemToggled', handleGrowthSystemToggled);
       window.removeEventListener('customerGrowthSettingsChanged', handleCustomerGrowthSettingsChanged);
       window.removeEventListener('orderGrowthAccessChanged', handleOrderGrowthAccessChanged);
     };

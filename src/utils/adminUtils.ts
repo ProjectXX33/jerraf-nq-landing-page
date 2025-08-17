@@ -1,4 +1,6 @@
 // Admin utilities for managing dashboard and Growth System settings
+// NOTE: This class now primarily serves as a compatibility layer.
+// The main state management is handled by GrowthSystemContext for real-time updates.
 
 export interface AdminSettings {
   isLoggedIn: boolean;
@@ -11,8 +13,16 @@ export class AdminUtils {
   private static readonly ADMIN_STORAGE_KEY = 'nq_admin_settings';
   private static readonly SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
   private static readonly ADMIN_PASSWORD = '?X{g^w33l@)J3S2vP'; // Secure admin password
+  
+  // Global state holder for immediate access (updated by context)
+  private static currentState: AdminSettings | null = null;
 
-  // Get admin settings from localStorage
+  // Update current state from context (called by GrowthSystemContext)
+  static updateCurrentState(state: AdminSettings): void {
+    this.currentState = state;
+  }
+
+  // Get admin settings - prioritizes current state over localStorage
   static getAdminSettings(): AdminSettings {
     const defaultSettings: AdminSettings = {
       isLoggedIn: false,
@@ -20,6 +30,12 @@ export class AdminUtils {
       sessionDuration: this.SESSION_DURATION
     };
 
+    // If we have current state from context, use it (real-time)
+    if (this.currentState) {
+      return this.currentState;
+    }
+
+    // Fallback to localStorage for backward compatibility
     try {
       const stored = localStorage.getItem(this.ADMIN_STORAGE_KEY);
       if (!stored) return defaultSettings;
