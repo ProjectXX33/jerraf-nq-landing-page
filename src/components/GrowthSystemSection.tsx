@@ -227,6 +227,18 @@ const GrowthSystemSection: React.FC = () => {
     if (orderUsage.canUse && orderUsage.availableUsages === 0) {
       setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
       setShowExhaustedState(true);
+      
+      // Clear form data when user tries to use at 0 usages
+      setFormData({
+        name: '',
+        gender: Gender.MALE,
+        age: '',
+        ageUnit: AgeUnit.MONTHS,
+        weight: '',
+        height: '',
+      });
+      setReport(null);
+      
       return;
     }
 
@@ -300,21 +312,19 @@ const GrowthSystemSection: React.FC = () => {
             const updatedUsage = await checkCustomerOrderAccess(email);
             setOrderBasedUsage(updatedUsage);
             
-            // Check if user has reached 0 usages and show exhausted state
-            if (updatedUsage.availableUsages === 0) {
-              setShowExhaustedState(true);
-              // Clear form data and reset to locked state
-              setFormData({
-                name: '',
-                gender: Gender.MALE,
-                age: '',
-                ageUnit: AgeUnit.MONTHS,
-                weight: '',
-                height: '',
-              });
-              setReport(null);
-              setError(null);
-            }
+            // Clear form for next child but preserve access and customer data
+            setFormData({
+              name: '',
+              gender: Gender.MALE,
+              age: '',
+              ageUnit: AgeUnit.MONTHS,
+              weight: '',
+              height: '',
+            });
+            // Keep the report visible so user can see the results
+            
+            // Don't lock immediately when reaching 0 - let user see they have 0 remaining
+            // The lock will happen when they try to use again (checked at form submission)
           } else {
             // Could not consume usage - already exhausted
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
@@ -328,21 +338,18 @@ const GrowthSystemSection: React.FC = () => {
             const updatedUsage = await checkCustomerOrderAccess(email);
             setOrderBasedUsage(updatedUsage);
             
-            // Check if user has reached 0 usages and show exhausted state
-            if (updatedUsage.availableUsages === 0) {
-              setShowExhaustedState(true);
-              // Clear form data and reset to locked state
-              setFormData({
-                name: '',
-                gender: Gender.MALE,
-                age: '',
-                ageUnit: AgeUnit.MONTHS,
-                weight: '',
-                height: '',
-              });
-              setReport(null);
-              setError(null);
-            }
+            // Clear form for next child but preserve access and customer data
+            setFormData({
+              name: '',
+              gender: Gender.MALE,
+              age: '',
+              ageUnit: AgeUnit.MONTHS,
+              weight: '',
+              height: '',
+            });
+            
+            // Don't lock immediately when reaching 0 - let user see they have 0 remaining
+            // The lock will happen when they try to use again (checked at form submission)
           } else {
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
             setShowExhaustedState(true);
@@ -359,12 +366,16 @@ const GrowthSystemSection: React.FC = () => {
   };
   
   const handleReset = () => {
+    // Only reset the report and UI state, NOT the customer access data
     setReport(null);
     setError(null);
     setIsLoading(false);
     setShowExhaustedState(false);
     
-    // Also refresh the usage stats
+    // DON'T clear form data - let user continue with the same session
+    // DON'T clear customerEmail or orderBasedUsage - preserve access
+    
+    // Refresh usage stats to show current remaining usages
     if (customerEmail) {
       checkCustomerOrderAccess(customerEmail).then(updatedUsage => {
         setOrderBasedUsage(updatedUsage);
@@ -441,8 +452,8 @@ const GrowthSystemSection: React.FC = () => {
         
         // Force update the component state to refresh the UI
         setTimeout(() => {
-          // Clear the order number input so it doesn't show again
-          setOrderNumber('');
+          // DON'T clear the order number - keep it so user doesn't need to re-enter
+          // setOrderNumber(''); // REMOVED - this was causing the issue
           
           // Reset exhausted state since we have new access
           setShowExhaustedState(false);

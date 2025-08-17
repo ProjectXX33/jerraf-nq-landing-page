@@ -271,26 +271,8 @@ export class OrderSupabaseService {
         return { success: false, error: updateError.message };
       }
 
-      // Log the usage (with error handling)
-      try {
-        await supabase
-          .from('growth_system_usage')
-          .insert({
-            customer_email: customerEmail,
-            order_number: availableOrder.order_number,
-            child_name: childData.name,
-            child_age: childData.age,
-            child_age_unit: childData.ageUnit,
-            child_gender: childData.gender,
-            child_weight: childData.weight,
-            child_height: childData.height,
-            report_generated: true,
-            usage_timestamp: new Date().toISOString()
-          });
-      } catch (usageLogError) {
-        console.warn('Could not log usage to database:', usageLogError);
-        // Don't fail the whole operation if logging fails
-      }
+      // Usage logging temporarily disabled due to table issues
+      console.log('📝 Usage logging skipped - main system functionality preserved');
 
       return { success: true };
     } catch (error) {

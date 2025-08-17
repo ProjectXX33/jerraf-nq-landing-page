@@ -172,7 +172,7 @@ export class AdminSupabaseService {
           table: 'order_growth_access'
         },
         async (payload) => {
-          // Safely extract order data with type checking
+           // Safely extract order data with type checking
           const newData = payload.new as any;
           const oldData = payload.old as any;
           
