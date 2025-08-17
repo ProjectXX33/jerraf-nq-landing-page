@@ -172,11 +172,6 @@ export class AdminSupabaseService {
           table: 'order_growth_access'
         },
         async (payload) => {
-          console.log('🚨 ORDER GROWTH ACCESS REAL-TIME UPDATE:', payload);
-          console.log('🚨 Order Event type:', payload.eventType);
-          console.log('🚨 Order New data:', payload.new);
-          console.log('🚨 Order Old data:', payload.old);
-          
           // Safely extract order data with type checking
           const newData = payload.new as any;
           const oldData = payload.old as any;
