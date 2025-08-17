@@ -146,7 +146,7 @@ export class OrderSupabaseService {
       const availableUsages = totalUsages - usedUsages;
 
       return {
-        canUse: availableUsages > 0,
+        canUse: enabledOrders.length > 0, // User can access the form if they have enabled orders, regardless of remaining usages
         availableUsages,
         enabledOrders
       };

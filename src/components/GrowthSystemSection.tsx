@@ -223,24 +223,8 @@ const GrowthSystemSection: React.FC = () => {
       return;
     }
     
-    // Check if user is trying to use when they have 0 usages (would go below 0)
-    if (orderUsage.canUse && orderUsage.availableUsages === 0) {
-      setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
-      setShowExhaustedState(true);
-      
-      // Clear form data when user tries to use at 0 usages
-      setFormData({
-        name: '',
-        gender: Gender.MALE,
-        age: '',
-        ageUnit: AgeUnit.MONTHS,
-        weight: '',
-        height: '',
-      });
-      setReport(null);
-      
-      return;
-    }
+    // Remove this check - let the system attempt to use and then handle exhaustion
+    // The 0 usage check will happen naturally when trying to consume usage
 
     // This check is removed - let the system naturally consume usages
     // The exhausted state will be handled after attempting to use the system
@@ -326,9 +310,22 @@ const GrowthSystemSection: React.FC = () => {
             // Don't lock immediately when reaching 0 - let user see they have 0 remaining
             // The lock will happen when they try to use again (checked at form submission)
           } else {
-            // Could not consume usage - already exhausted
+            // Could not consume usage - user tried to use at 0 usages
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
             setShowExhaustedState(true);
+            
+            // Clear form data when user tries to use at 0 usages
+            setFormData({
+              name: '',
+              gender: Gender.MALE,
+              age: '',
+              ageUnit: AgeUnit.MONTHS,
+              weight: '',
+              height: '',
+            });
+            setReport(null);
+            setCustomerEmail('');
+            setOrderBasedUsage({ canUse: false, availableUsages: 0, enabledOrders: [] });
           }
         } catch (error) {
           console.error('Error recording usage:', error);
@@ -351,8 +348,22 @@ const GrowthSystemSection: React.FC = () => {
             // Don't lock immediately when reaching 0 - let user see they have 0 remaining
             // The lock will happen when they try to use again (checked at form submission)
           } else {
+            // Could not consume usage - user tried to use at 0 usages (fallback case)
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
             setShowExhaustedState(true);
+            
+            // Clear form data when user tries to use at 0 usages
+            setFormData({
+              name: '',
+              gender: Gender.MALE,
+              age: '',
+              ageUnit: AgeUnit.MONTHS,
+              weight: '',
+              height: '',
+            });
+            setReport(null);
+            setCustomerEmail('');
+            setOrderBasedUsage({ canUse: false, availableUsages: 0, enabledOrders: [] });
           }
         }
       } else {
