@@ -42,22 +42,17 @@ const GrowthSystemSection: React.FC = () => {
   // Function to check order access across both Supabase and local data
   const checkCustomerOrderAccess = async (email: string) => {
     try {
-      console.log('🔍 Checking order access for email:', email);
-      
       // Check Supabase first
       const supabaseAccess = await OrderSupabaseService.canCustomerUseGrowthSystem(email);
-      console.log('📋 Supabase access result:', supabaseAccess);
       
       // Check local data as fallback
       const localAccess = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
-      console.log('💾 Local access result:', localAccess);
       
       // Combine the results - prioritize Supabase if it has data
       const hasSupabaseData = supabaseAccess.enabledOrders.length > 0;
       
       if (hasSupabaseData) {
-        console.log('✅ Using Supabase order access data');
-        const result = {
+        return {
           canUse: supabaseAccess.canUse,
           availableUsages: supabaseAccess.availableUsages,
           enabledOrders: supabaseAccess.enabledOrders.map(order => ({
@@ -67,25 +62,19 @@ const GrowthSystemSection: React.FC = () => {
             usageCount: order.usage_count
           }))
         };
-        console.log('📋 Final Supabase result:', result);
-        return result;
       } else {
-        console.log('💾 Using local order access data');
-        console.log('💾 Final local result:', localAccess);
         return localAccess;
       }
     } catch (error) {
-      console.error('❌ Error checking order access:', error);
+      console.error('Error checking order access:', error);
       // Fallback to local data only
-      const fallback = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
-      console.log('🆘 Fallback result:', fallback);
-      return fallback;
+      return OrderGrowthUtils.canCustomerUseGrowthSystem(email);
     }
   };
 
   // Check purchase status on component mount
   useEffect(() => {
-    const updateStatus = () => {
+    const updateStatus = async () => {
       // Check old purchase system for backward compatibility
       const purchased = PurchaseUtils.hasPurchased();
       const stats = PurchaseUtils.getUsageStats();
@@ -94,9 +83,13 @@ const GrowthSystemSection: React.FC = () => {
       
       // Check new order-based system with hybrid approach
       const email = customerEmail || 'guest_user@temp.com';
-      checkCustomerOrderAccess(email).then(orderUsage => {
+      
+      try {
+        const orderUsage = await checkCustomerOrderAccess(email);
         setOrderBasedUsage(orderUsage);
-      });
+      } catch (error) {
+        console.error('Error updating status:', error);
+      }
     };
 
     updateStatus();
@@ -170,6 +163,32 @@ const GrowthSystemSection: React.FC = () => {
       window.removeEventListener('orderGrowthAccessChanged', handleOrderGrowthAccessChanged);
     };
   }, []);
+
+  // Add an effect to refresh state when customerEmail changes (but only if no current access)
+  useEffect(() => {
+    if (customerEmail && customerEmail !== 'guest_user@temp.com' && !orderBasedUsage.canUse) {
+      const refreshAccess = async () => {
+        try {
+          const orderUsage = await checkCustomerOrderAccess(customerEmail);
+          
+          // Only update if we found access or if current state shows no access
+          if (orderUsage.canUse || !orderBasedUsage.canUse) {
+            setOrderBasedUsage(orderUsage);
+            
+            // Clear any existing errors/exhausted state if user now has access
+            if (orderUsage.canUse && orderUsage.availableUsages > 0) {
+              setError(null);
+              setShowExhaustedState(false);
+            }
+          }
+        } catch (error) {
+          console.error('Error refreshing access:', error);
+        }
+      };
+      
+      refreshAccess();
+    }
+  }, [customerEmail]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -262,7 +281,6 @@ const GrowthSystemSection: React.FC = () => {
           let usageConsumed = false;
           
           if (hasSupabaseData) {
-            console.log('🔄 Recording usage in Supabase...');
             const result = await OrderSupabaseService.recordUsage(email, {
               name: formData.name,
               age: Number(formData.age),
@@ -272,10 +290,8 @@ const GrowthSystemSection: React.FC = () => {
               height: Number(formData.height)
             });
             usageConsumed = result.success;
-            console.log('📝 Supabase usage result:', result);
           } else {
             // Fallback to local system
-            console.log('💾 Recording usage locally...');
             usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
           }
           
@@ -284,8 +300,21 @@ const GrowthSystemSection: React.FC = () => {
             const updatedUsage = await checkCustomerOrderAccess(email);
             setOrderBasedUsage(updatedUsage);
             
-            // Don't show exhausted state here - let them see they have 0 usages
-            // The lock will only appear when they try to use again
+            // Check if user has reached 0 usages and show exhausted state
+            if (updatedUsage.availableUsages === 0) {
+              setShowExhaustedState(true);
+              // Clear form data and reset to locked state
+              setFormData({
+                name: '',
+                gender: Gender.MALE,
+                age: '',
+                ageUnit: AgeUnit.MONTHS,
+                weight: '',
+                height: '',
+              });
+              setReport(null);
+              setError(null);
+            }
           } else {
             // Could not consume usage - already exhausted
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
@@ -298,6 +327,22 @@ const GrowthSystemSection: React.FC = () => {
           if (usageConsumed) {
             const updatedUsage = await checkCustomerOrderAccess(email);
             setOrderBasedUsage(updatedUsage);
+            
+            // Check if user has reached 0 usages and show exhausted state
+            if (updatedUsage.availableUsages === 0) {
+              setShowExhaustedState(true);
+              // Clear form data and reset to locked state
+              setFormData({
+                name: '',
+                gender: Gender.MALE,
+                age: '',
+                ageUnit: AgeUnit.MONTHS,
+                weight: '',
+                height: '',
+              });
+              setReport(null);
+              setError(null);
+            }
           } else {
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
             setShowExhaustedState(true);
@@ -338,15 +383,11 @@ const GrowthSystemSection: React.FC = () => {
     try {
       // Check if this order number exists and is enabled for Growth System
       // Check both Supabase and local data
-      console.log('🔍 Searching for order:', orderNumber.trim());
-      
       // Get Supabase enabled orders
       const supabaseOrders = await OrderSupabaseService.getEnabledOrders();
-      console.log('📋 Supabase enabled orders:', supabaseOrders);
       
       // Get local enabled orders as fallback
       const localOrders = OrderGrowthUtils.getEnabledOrders();
-      console.log('💾 Local enabled orders:', localOrders);
       
       // Check Supabase first
       let matchingOrder = supabaseOrders.find(order => 
@@ -366,7 +407,6 @@ const GrowthSystemSection: React.FC = () => {
           usageCount: matchingOrder.usage_count,
           isGrowthEnabled: matchingOrder.is_growth_enabled
         };
-        console.log('✅ Found order in Supabase:', normalizedOrder);
       } else {
         // Fallback to local data
         const localMatch = localOrders.find(order => 
@@ -374,7 +414,6 @@ const GrowthSystemSection: React.FC = () => {
         );
         if (localMatch) {
           normalizedOrder = localMatch;
-          console.log('💾 Found order in local data:', normalizedOrder);
         }
       }
 
@@ -382,24 +421,32 @@ const GrowthSystemSection: React.FC = () => {
         // Set customer email from the matching order
         setCustomerEmail(normalizedOrder.customerEmail);
         
-        // Update order-based usage with hybrid approach
-        const orderUsage = await checkCustomerOrderAccess(normalizedOrder.customerEmail);
-        setOrderBasedUsage(orderUsage);
+        // Update order-based usage with hybrid approach - use the found order data directly
+        const orderUsageFromOrder = {
+          canUse: true,
+          availableUsages: normalizedOrder.maxUsage - normalizedOrder.usageCount,
+          enabledOrders: [{
+            orderId: normalizedOrder.orderId,
+            orderNumber: normalizedOrder.orderNumber,
+            maxUsage: normalizedOrder.maxUsage,
+            usageCount: normalizedOrder.usageCount
+          }]
+        };
+        
+        setOrderBasedUsage(orderUsageFromOrder);
         
         // Success message
         setOrderCheckError('');
-        alert(`✅ تم العثور على طلبك! ${orderUsage.availableUsages} استخدام متاح لنظام النمو`);
+        alert(`✅ تم العثور على طلبك! ${orderUsageFromOrder.availableUsages} استخدام متاح لنظام النمو`);
         
         // Force update the component state to refresh the UI
-        setTimeout(async () => {
-          const updatedUsage = await checkCustomerOrderAccess(normalizedOrder.customerEmail);
-          setOrderBasedUsage(updatedUsage);
-          
+        setTimeout(() => {
           // Clear the order number input so it doesn't show again
           setOrderNumber('');
           
           // Reset exhausted state since we have new access
           setShowExhaustedState(false);
+          setError(null);
         }, 100);
       } else {
         setOrderCheckError('رقم الطلب غير موجود أو غير مُفعل لنظام النمو. يرجى التأكد من رقم الطلب أو التواصل مع الدعم الفني.');
@@ -549,10 +596,13 @@ const GrowthSystemSection: React.FC = () => {
               </p>
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 md:p-4 mb-6">
                 <p className="text-red-800 font-semibold text-xs md:text-sm">
-                  ⚠️ لا توجد استخدامات متبقية (0/{orderBasedUsage.enabledOrders.reduce((total, order) => total + order.maxUsage, 0)})
+                  🔒 لقد استنفدت جميع استخداماتك المتاحة (0/{orderBasedUsage.enabledOrders.reduce((total, order) => total + order.maxUsage, 0)})
                 </p>
                 <p className="text-red-700 text-xs mt-1">
-                  اطلب المزيد من المنتجات للحصول على استخدامات إضافية
+                  للاستمرار في استخدام نظام النمو، يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية
+                </p>
+                <p className="text-red-600 text-xs mt-2 font-medium">
+                  🛒 اطلب الآن لتحصل على استخدامات جديدة لنظام النمو
                 </p>
               </div>
               
