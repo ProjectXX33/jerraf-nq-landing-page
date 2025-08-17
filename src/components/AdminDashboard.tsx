@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AdminUtils } from '../utils/adminUtils';
 import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
+import { OrderSupabaseService } from '../services/orderSupabaseService';
 import { wooCommerceService } from '../services/woocommerceService';
 import { useGrowthSystem, formatTimeRemaining } from '../contexts/GrowthSystemContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -56,7 +57,7 @@ interface Order {
 
 const AdminDashboard: React.FC = () => {
   // Use the growth system context for real-time state
-  const { settings: growthSettings, login, logout, getSessionInfo, toggleGrowthSystem } = useGrowthSystem();
+  const { settings: growthSettings, isInitialized, login, logout, getSessionInfo, toggleGrowthSystem } = useGrowthSystem();
   
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -73,11 +74,45 @@ const AdminDashboard: React.FC = () => {
     reason: ''
   });
   const [orderGrowthStats, setOrderGrowthStats] = useState(OrderGrowthUtils.getStatistics());
+  const [supabaseOrderAccess, setSupabaseOrderAccess] = useState<Record<number, any>>({});
   
   // Get real-time values from context
   const isLoggedIn = growthSettings.isAdminLoggedIn;
   const growthSystemEnabled = growthSettings.isEnabled;
-  const sessionInfo = getSessionInfo();
+  
+  // Debug state changes
+  useEffect(() => {
+    console.log('🎯 AdminDashboard state update:', {
+      isLoggedIn,
+      growthSystemEnabled,
+      isInitialized,
+      settings: growthSettings
+    });
+  }, [isLoggedIn, growthSystemEnabled, isInitialized, growthSettings]);
+  
+  // Session info state (since getSessionInfo is now async)
+  const [sessionInfo, setSessionInfo] = useState({ timeRemaining: 0, isValid: false, expiresAt: null });
+
+  // Update session info periodically
+  useEffect(() => {
+    if (!isLoggedIn || !isInitialized) return;
+
+    const updateSessionInfo = async () => {
+      try {
+        const info = await getSessionInfo();
+        setSessionInfo(info);
+      } catch (error) {
+        console.error('Error getting session info:', error);
+      }
+    };
+
+    // Update immediately
+    updateSessionInfo();
+    
+    // Update every minute
+    const interval = setInterval(updateSessionInfo, 60000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, isInitialized, getSessionInfo]);
 
   // Listen for customer settings changes (no longer need admin settings changes since using context)
   useEffect(() => {
@@ -86,7 +121,9 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleOrderGrowthAccessChange = () => {
+      // Reload both local and Supabase data when real-time changes occur
       setOrderGrowthStats(OrderGrowthUtils.getStatistics());
+      loadOrderAccessData();
     };
 
     // Auto-unlock Growth System when order is completed
@@ -114,27 +151,65 @@ const AdminDashboard: React.FC = () => {
     };
   }, []); // No dependencies to avoid circular dependency issues
 
-  // Load orders when logged in or filter changes
+  // Load orders and their access data when logged in or filter changes
   useEffect(() => {
     if (isLoggedIn) {
       loadOrders();
+      loadOrderAccessData();
     }
   }, [isLoggedIn, onlyFormOrders]);
 
-  const handleLogin = () => {
-    setLoginError('');
-    
-    if (login(password)) {
-      setPassword('');
-    } else {
-      setLoginError('كلمة المرور غير صحيحة');
+  // Load order access data from Supabase
+  const loadOrderAccessData = async () => {
+    try {
+      const enabledOrders = await OrderSupabaseService.getEnabledOrders();
+      const accessMap: Record<number, any> = {};
+      
+      for (const orderAccess of enabledOrders) {
+        accessMap[orderAccess.order_id] = orderAccess;
+      }
+      
+      setSupabaseOrderAccess(accessMap);
+      console.log('📥 Loaded order access data from Supabase:', accessMap);
+    } catch (error) {
+      console.error('Error loading order access data:', error);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    setPassword('');
-    setOrders([]);
+  const handleLogin = async () => {
+    setLoginError('');
+    
+    try {
+      console.log('🔐 Starting login process...');
+      const success = await login(password);
+      console.log('🔐 Login result:', success);
+      
+      if (success) {
+        setPassword('');
+        console.log('✅ Login successful, password cleared');
+      } else {
+        setLoginError('كلمة المرور غير صحيحة');
+        console.log('❌ Login failed: incorrect password');
+      }
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      setLoginError('حدث خطأ أثناء تسجيل الدخول');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      console.log('🚪 Starting logout process...');
+      await logout();
+      console.log('✅ Logout successful');
+      setPassword('');
+      setOrders([]);
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      // Still clear local state even if logout fails
+      setPassword('');
+      setOrders([]);
+    }
   };
 
   const loadOrders = async () => {
@@ -205,30 +280,60 @@ const AdminDashboard: React.FC = () => {
     setCustomerAction({ action: 'block', reason: '' });
   };
 
-  const handleOrderGrowthToggle = (order: Order, enabled: boolean) => {
+  const handleOrderGrowthToggle = async (order: Order, enabled: boolean) => {
     const customerEmail = OrderGrowthUtils.getCustomerEmailFromOrder(order);
     const customerName = `${order.billing.first_name} ${order.billing.last_name}`;
     const maxUsage = OrderGrowthUtils.calculateMaxUsageFromOrder(order);
     
-    if (enabled) {
-      OrderGrowthUtils.enableGrowthForOrder(
-        order.id,
-        order.number,
-        customerEmail,
-        customerName,
-        maxUsage,
-        'admin',
-        'تم التفعيل من لوحة التحكم'
-      );
-    } else {
-      OrderGrowthUtils.disableGrowthForOrder(order.id);
+    try {
+      console.log(`🔄 ${enabled ? 'Enabling' : 'Disabling'} growth for order ${order.id}...`);
+      
+      if (enabled) {
+        const result = await OrderSupabaseService.enableGrowthForOrder(
+          order.id,
+          order.number,
+          customerEmail,
+          customerName,
+          maxUsage,
+          'admin',
+          'تم التفعيل من لوحة التحكم'
+        );
+        
+        if (!result.success) {
+          console.error('Failed to enable growth:', result.error);
+          return;
+        }
+      } else {
+        const result = await OrderSupabaseService.disableGrowthForOrder(
+          order.id,
+          'admin',
+          'تم التعطيل من لوحة التحكم'
+        );
+        
+        if (!result.success) {
+          console.error('Failed to disable growth:', result.error);
+          return;
+        }
+      }
+      
+      // Refresh order access data after toggle
+      await loadOrderAccessData();
+      
+      // Update local stats (backward compatibility)
+      setOrderGrowthStats(OrderGrowthUtils.getStatistics());
+      
+      console.log(`✅ Growth ${enabled ? 'enabled' : 'disabled'} for order ${order.id}`);
+    } catch (error) {
+      console.error('Error toggling order growth:', error);
     }
-    
-    setOrderGrowthStats(OrderGrowthUtils.getStatistics());
   };
 
-  const handleGrowthSystemToggle = (enabled: boolean) => {
-    toggleGrowthSystem(enabled);
+  const handleGrowthSystemToggle = async (enabled: boolean) => {
+    try {
+      await toggleGrowthSystem(enabled);
+    } catch (error) {
+      console.error('Error toggling growth system:', error);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -292,6 +397,20 @@ const AdminDashboard: React.FC = () => {
       new Date(b.lastOrderDate).getTime() - new Date(a.lastOrderDate).getTime()
     );
   };
+
+  // Show loading while Supabase is initializing
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" dir="rtl">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">جاري تحميل النظام...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Login form
   if (!isLoggedIn) {
@@ -597,20 +716,35 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex items-center gap-2 mb-1">
                               <strong className="text-xs">نظام النمو:</strong>
                               {(() => {
-                                const orderAccess = OrderGrowthUtils.getOrderAccess(order.id);
-                                return orderAccess?.isGrowthEnabled ? (
-                                  <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
-                                    مُفعل ({orderAccess.maxUsage - orderAccess.usageCount}/{orderAccess.maxUsage})
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="text-xs">معطل</Badge>
-                                );
+                                // Check Supabase data first, fallback to local data
+                                const supabaseAccess = supabaseOrderAccess[order.id];
+                                const localAccess = OrderGrowthUtils.getOrderAccess(order.id);
+                                
+                                if (supabaseAccess?.is_growth_enabled) {
+                                  return (
+                                    <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
+                                      مُفعل ({supabaseAccess.max_usage - supabaseAccess.usage_count}/{supabaseAccess.max_usage})
+                                    </Badge>
+                                  );
+                                } else if (localAccess?.isGrowthEnabled) {
+                                  return (
+                                    <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
+                                      مُفعل ({localAccess.maxUsage - localAccess.usageCount}/{localAccess.maxUsage})
+                                    </Badge>
+                                  );
+                                } else {
+                                  return <Badge variant="secondary" className="text-xs">معطل</Badge>;
+                                }
                               })()}
                             </div>
                             <div className="flex gap-1">
                               {(() => {
-                                const orderAccess = OrderGrowthUtils.getOrderAccess(order.id);
-                                return orderAccess?.isGrowthEnabled ? (
+                                // Check Supabase data first, fallback to local data
+                                const supabaseAccess = supabaseOrderAccess[order.id];
+                                const localAccess = OrderGrowthUtils.getOrderAccess(order.id);
+                                const isEnabled = supabaseAccess?.is_growth_enabled || localAccess?.isGrowthEnabled;
+                                
+                                return isEnabled ? (
                                   <Button
                                     size="sm"
                                     variant="destructive"

@@ -1,0 +1,9 @@
+# Supabase Configuration Template
+# Create a .env.local file in your project root with these variables
+
+# Get these from your Supabase project settings
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Optional: If you want to use service role key for admin operations
+VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here

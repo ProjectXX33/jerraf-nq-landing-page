@@ -9,6 +9,7 @@ import { PurchaseUtils } from '../utils/purchaseUtils';
 import { AdminUtils } from '../utils/adminUtils';
 import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
+import { OrderSupabaseService } from '../services/orderSupabaseService';
 import { useGrowthSystem } from '../contexts/GrowthSystemContext';
 
 const GrowthSystemSection: React.FC = () => {
@@ -38,6 +39,50 @@ const GrowthSystemSection: React.FC = () => {
   // Get admin lock status directly from context (real-time)
   const isAdminLocked = !growthSettings.isEnabled;
 
+  // Function to check order access across both Supabase and local data
+  const checkCustomerOrderAccess = async (email: string) => {
+    try {
+      console.log('🔍 Checking order access for email:', email);
+      
+      // Check Supabase first
+      const supabaseAccess = await OrderSupabaseService.canCustomerUseGrowthSystem(email);
+      console.log('📋 Supabase access result:', supabaseAccess);
+      
+      // Check local data as fallback
+      const localAccess = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
+      console.log('💾 Local access result:', localAccess);
+      
+      // Combine the results - prioritize Supabase if it has data
+      const hasSupabaseData = supabaseAccess.enabledOrders.length > 0;
+      
+      if (hasSupabaseData) {
+        console.log('✅ Using Supabase order access data');
+        const result = {
+          canUse: supabaseAccess.canUse,
+          availableUsages: supabaseAccess.availableUsages,
+          enabledOrders: supabaseAccess.enabledOrders.map(order => ({
+            orderId: order.order_id,
+            orderNumber: order.order_number,
+            maxUsage: order.max_usage,
+            usageCount: order.usage_count
+          }))
+        };
+        console.log('📋 Final Supabase result:', result);
+        return result;
+      } else {
+        console.log('💾 Using local order access data');
+        console.log('💾 Final local result:', localAccess);
+        return localAccess;
+      }
+    } catch (error) {
+      console.error('❌ Error checking order access:', error);
+      // Fallback to local data only
+      const fallback = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
+      console.log('🆘 Fallback result:', fallback);
+      return fallback;
+    }
+  };
+
   // Check purchase status on component mount
   useEffect(() => {
     const updateStatus = () => {
@@ -47,10 +92,11 @@ const GrowthSystemSection: React.FC = () => {
       setHasPurchased(purchased);
       setUsageStats(stats);
       
-      // Check new order-based system
+      // Check new order-based system with hybrid approach
       const email = customerEmail || 'guest_user@temp.com';
-      const orderUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
-      setOrderBasedUsage(orderUsage);
+      checkCustomerOrderAccess(email).then(orderUsage => {
+        setOrderBasedUsage(orderUsage);
+      });
     };
 
     updateStatus();
@@ -66,7 +112,7 @@ const GrowthSystemSection: React.FC = () => {
       
       if (demoOrders.length > 0) {
         demoOrders.forEach(order => {
-          OrderGrowthUtils.disableGrowthForOrder(order.orderId, 'system', 'Removing demo data');
+          OrderGrowthUtils.disableGrowthForOrder(order.orderId);
         });
       }
     }
@@ -104,8 +150,9 @@ const GrowthSystemSection: React.FC = () => {
       
       // Also update order-based usage if customer email is set
       if (customerEmail) {
-        const updatedUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(customerEmail);
-        setOrderBasedUsage(updatedUsage);
+        checkCustomerOrderAccess(customerEmail).then(updatedUsage => {
+          setOrderBasedUsage(updatedUsage);
+        });
       }
     };
 
@@ -138,8 +185,8 @@ const GrowthSystemSection: React.FC = () => {
     // Get customer email for individual blocking check
     const email = customerEmail || `guest_user_${Date.now()}@temp.com`;
     
-    // Check order-based usage first (new system)
-    const orderUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
+    // Check order-based usage first (new system) - use hybrid approach
+    const orderUsage = await checkCustomerOrderAccess(email);
     
     // Check old purchase system for backward compatibility (only if admin system is enabled)
     const canUsePurchase = !isAdminLocked && PurchaseUtils.canUseGrowthSystem();
@@ -206,19 +253,55 @@ const GrowthSystemSection: React.FC = () => {
       // Consume one usage after successful report generation
       // Try order-based system first, fallback to old system
       if (orderUsage.canUse) {
-        const usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
-        
-        if (usageConsumed) {
-          // Update the local state immediately
-          const updatedUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(email);
-          setOrderBasedUsage(updatedUsage);
+        try {
+          // Try Supabase first if we have Supabase data
+          const hasSupabaseData = orderUsage.enabledOrders.some(order => 
+            order.orderId && typeof order.orderId === 'number'
+          );
           
-          // Don't show exhausted state here - let them see they have 0 usages
-          // The lock will only appear when they try to use again
-        } else {
-          // Could not consume usage - already exhausted
-          setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
-          setShowExhaustedState(true);
+          let usageConsumed = false;
+          
+          if (hasSupabaseData) {
+            console.log('🔄 Recording usage in Supabase...');
+            const result = await OrderSupabaseService.recordUsage(email, {
+              name: formData.name,
+              age: Number(formData.age),
+              ageUnit: formData.ageUnit,
+              gender: formData.gender,
+              weight: Number(formData.weight),
+              height: Number(formData.height)
+            });
+            usageConsumed = result.success;
+            console.log('📝 Supabase usage result:', result);
+          } else {
+            // Fallback to local system
+            console.log('💾 Recording usage locally...');
+            usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
+          }
+          
+          if (usageConsumed) {
+            // Update the local state immediately
+            const updatedUsage = await checkCustomerOrderAccess(email);
+            setOrderBasedUsage(updatedUsage);
+            
+            // Don't show exhausted state here - let them see they have 0 usages
+            // The lock will only appear when they try to use again
+          } else {
+            // Could not consume usage - already exhausted
+            setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
+            setShowExhaustedState(true);
+          }
+        } catch (error) {
+          console.error('Error recording usage:', error);
+          // Fallback to local system
+          const usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
+          if (usageConsumed) {
+            const updatedUsage = await checkCustomerOrderAccess(email);
+            setOrderBasedUsage(updatedUsage);
+          } else {
+            setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
+            setShowExhaustedState(true);
+          }
         }
       } else {
       PurchaseUtils.useGrowthSystem();
@@ -238,8 +321,9 @@ const GrowthSystemSection: React.FC = () => {
     
     // Also refresh the usage stats
     if (customerEmail) {
-      const updatedUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(customerEmail);
-      setOrderBasedUsage(updatedUsage);
+      checkCustomerOrderAccess(customerEmail).then(updatedUsage => {
+        setOrderBasedUsage(updatedUsage);
+      });
     }
   }
 
@@ -253,17 +337,53 @@ const GrowthSystemSection: React.FC = () => {
 
     try {
       // Check if this order number exists and is enabled for Growth System
-      const allEnabledOrders = OrderGrowthUtils.getEnabledOrders();
-      const matchingOrder = allEnabledOrders.find(order => 
-        order.orderNumber.toLowerCase() === orderNumber.trim().toLowerCase()
+      // Check both Supabase and local data
+      console.log('🔍 Searching for order:', orderNumber.trim());
+      
+      // Get Supabase enabled orders
+      const supabaseOrders = await OrderSupabaseService.getEnabledOrders();
+      console.log('📋 Supabase enabled orders:', supabaseOrders);
+      
+      // Get local enabled orders as fallback
+      const localOrders = OrderGrowthUtils.getEnabledOrders();
+      console.log('💾 Local enabled orders:', localOrders);
+      
+      // Check Supabase first
+      let matchingOrder = supabaseOrders.find(order => 
+        order.order_number.toLowerCase() === orderNumber.trim().toLowerCase()
       );
-
+      
+      let normalizedOrder: any = null;
+      
       if (matchingOrder) {
+        // Convert Supabase format to expected format
+        normalizedOrder = {
+          orderId: matchingOrder.order_id,
+          orderNumber: matchingOrder.order_number,
+          customerEmail: matchingOrder.customer_email,
+          customerName: matchingOrder.customer_name,
+          maxUsage: matchingOrder.max_usage,
+          usageCount: matchingOrder.usage_count,
+          isGrowthEnabled: matchingOrder.is_growth_enabled
+        };
+        console.log('✅ Found order in Supabase:', normalizedOrder);
+      } else {
+        // Fallback to local data
+        const localMatch = localOrders.find(order => 
+          order.orderNumber.toLowerCase() === orderNumber.trim().toLowerCase()
+        );
+        if (localMatch) {
+          normalizedOrder = localMatch;
+          console.log('💾 Found order in local data:', normalizedOrder);
+        }
+      }
+
+      if (normalizedOrder) {
         // Set customer email from the matching order
-        setCustomerEmail(matchingOrder.customerEmail);
+        setCustomerEmail(normalizedOrder.customerEmail);
         
-        // Update order-based usage
-        const orderUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(matchingOrder.customerEmail);
+        // Update order-based usage with hybrid approach
+        const orderUsage = await checkCustomerOrderAccess(normalizedOrder.customerEmail);
         setOrderBasedUsage(orderUsage);
         
         // Success message
@@ -271,8 +391,8 @@ const GrowthSystemSection: React.FC = () => {
         alert(`✅ تم العثور على طلبك! ${orderUsage.availableUsages} استخدام متاح لنظام النمو`);
         
         // Force update the component state to refresh the UI
-        setTimeout(() => {
-          const updatedUsage = OrderGrowthUtils.canCustomerUseGrowthSystem(matchingOrder.customerEmail);
+        setTimeout(async () => {
+          const updatedUsage = await checkCustomerOrderAccess(normalizedOrder.customerEmail);
           setOrderBasedUsage(updatedUsage);
           
           // Clear the order number input so it doesn't show again
