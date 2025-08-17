@@ -271,8 +271,28 @@ export class OrderSupabaseService {
         return { success: false, error: updateError.message };
       }
 
-      // Usage logging temporarily disabled due to table issues
-      console.log('📝 Usage logging skipped - main system functionality preserved');
+      // Log usage details to growth_system_usage table
+      try {
+        const { error: usageError } = await supabase
+          .from('growth_system_usage')
+          .insert({
+            customer_email: customerEmail,
+            order_id: availableOrder.order_id,
+            child_name: childData.name,
+            child_age: childData.age,
+            child_weight: childData.weight,
+            child_height: childData.height,
+            used_at: new Date().toISOString()
+          });
+
+        if (usageError) {
+          console.warn('⚠️ Usage logging failed (non-critical):', usageError.message);
+          // Don't fail the main operation - usage count was already incremented
+        }
+      } catch (logError) {
+        console.warn('⚠️ Usage logging error (non-critical):', logError);
+        // Continue - main functionality preserved
+      }
 
       return { success: true };
     } catch (error) {
