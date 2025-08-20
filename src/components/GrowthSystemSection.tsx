@@ -10,6 +10,7 @@ import { AdminUtils } from '../utils/adminUtils';
 import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
 import { OrderSupabaseService } from '../services/orderSupabaseService';
+import { CustomCodeService } from '../services/customCodeService';
 import { useGrowthSystem } from '../contexts/GrowthSystemContext';
 
 const GrowthSystemSection: React.FC = () => {
@@ -33,6 +34,7 @@ const GrowthSystemSection: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [isCustomerBlocked, setIsCustomerBlocked] = useState<boolean>(false);
   const [orderBasedUsage, setOrderBasedUsage] = useState({ canUse: false, availableUsages: 0, enabledOrders: [] });
+  const [currentCustomCode, setCurrentCustomCode] = useState<any>(null);
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [orderCheckError, setOrderCheckError] = useState<string>('');
   
@@ -164,6 +166,14 @@ const GrowthSystemSection: React.FC = () => {
     };
   }, []);
 
+  // Add an effect to reset exhausted state when order-based usage becomes valid
+  useEffect(() => {
+    if (orderBasedUsage.canUse && orderBasedUsage.availableUsages > 0) {
+      console.log('🔄 Resetting exhausted state due to valid order-based usage');
+      setShowExhaustedState(false);
+    }
+  }, [orderBasedUsage.canUse, orderBasedUsage.availableUsages]);
+
   // Add an effect to refresh state when customerEmail changes (but only if no current access)
   useEffect(() => {
     if (customerEmail && customerEmail !== 'guest_user@temp.com' && !orderBasedUsage.canUse) {
@@ -198,46 +208,10 @@ const GrowthSystemSection: React.FC = () => {
     }));
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Get customer email for individual blocking check
-    const email = customerEmail || `guest_user_${Date.now()}@temp.com`;
-    
-    // Check order-based usage first (new system) - use hybrid approach
-    const orderUsage = await checkCustomerOrderAccess(email);
-    
-    // Check old purchase system for backward compatibility (only if admin system is enabled)
-    const canUsePurchase = !isAdminLocked && PurchaseUtils.canUseGrowthSystem();
-    
-    // Customer can use if they have either order-based usage OR old purchase-based usage
-    const canUseSystem = orderUsage.canUse || canUsePurchase;
-    
-        if (!canUseSystem) {
-      if (orderUsage.enabledOrders.length === 0 && !hasPurchased) {
-        setError('يجب عليك إتمام طلب أولاً للحصول على إمكانية استخدام نظام النمو.');
-      } else {
-        setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
-        setShowExhaustedState(true);
-      }
-      return;
-    }
-    
-    // Remove this check - let the system attempt to use and then handle exhaustion
-    // The 0 usage check will happen naturally when trying to consume usage
-
-    // This check is removed - let the system naturally consume usages
-    // The exhausted state will be handled after attempting to use the system
-
-    // Check if customer is individually blocked
-    if (!CustomerGrowthUtils.getCustomerStatus(email).isEnabled) {
-      setError('تم تعطيل نظام النمو لحسابك من قبل الإدارة. يرجى التواصل مع الدعم الفني.');
-      return;
-    }
-
+  const generateReport = async () => {
     if (!formData.name.trim() || !formData.age || !formData.weight || !formData.height) {
-        setError('يرجى ملء جميع الحقول.');
-        return;
+      setError('يرجى ملء جميع الحقول.');
+      return;
     }
 
     const age = Number(formData.age);
@@ -250,26 +224,161 @@ const GrowthSystemSection: React.FC = () => {
     }
     
     const childDataForApi: ChildData = {
-        name: formData.name.trim(),
-        gender: formData.gender,
-        ageUnit: formData.ageUnit,
-        age,
-        weight,
-        height,
+      name: formData.name.trim(),
+      gender: formData.gender,
+      ageUnit: formData.ageUnit,
+      age,
+      weight,
+      height,
     };
     
     setError(null);
     setIsLoading(true);
     setReport(null);
+    
     try {
       const generatedReport = await generateGrowthReport(childDataForApi);
       setReport(generatedReport);
       
-      // Consume one usage after successful report generation
-      // Try order-based system first, fallback to old system
-      if (orderUsage.canUse) {
-        try {
-          // Try Supabase first if we have Supabase data
+      // Clear form for next child but preserve access and customer data
+      setFormData({
+        name: '',
+        gender: Gender.MALE,
+        age: '',
+        ageUnit: AgeUnit.MONTHS,
+        weight: '',
+        height: '',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Get customer email for individual blocking check
+    const email = customerEmail || `guest_user_${Date.now()}@temp.com`;
+    
+    // Check if user already has access from custom code (current orderBasedUsage state)
+    // For custom codes, allow access even at 0 usages (will be checked during submission)
+    const hasCustomCodeAccess = orderBasedUsage.canUse && orderBasedUsage.enabledOrders.length === 0;
+    
+    console.log('🔍 Form submission check:', {
+      hasCustomCodeAccess,
+      orderBasedUsage,
+      email
+    });
+    
+    // Only check order-based usage if user doesn't have custom code access
+    let orderUsage;
+    if (!hasCustomCodeAccess) {
+      orderUsage = await checkCustomerOrderAccess(email);
+    } else {
+      // Use current orderBasedUsage state for custom code access
+      orderUsage = orderBasedUsage;
+    }
+    
+    // Check old purchase system for backward compatibility (only if admin system is enabled)
+    const canUsePurchase = !isAdminLocked && PurchaseUtils.canUseGrowthSystem();
+    
+    // Customer can use if they have either custom code access, order-based usage OR old purchase-based usage
+    const canUseSystem = hasCustomCodeAccess || orderUsage.canUse || canUsePurchase;
+    
+    // Check if user is trying to use at 0 usages (for custom codes)
+    if (hasCustomCodeAccess && orderUsage.availableUsages <= 0) {
+      console.log('🔒 Custom code usage at 0 - preventing submission');
+      setError('لقد استنفدت جميع استخداماتك المتاحة من الكود المخصص.');
+      setShowExhaustedState(true);
+      // Don't clear anything - just lock the system
+      return;
+    }
+    
+    if (!canUseSystem) {
+      if (orderUsage.enabledOrders.length === 0 && !hasPurchased) {
+        setError('يجب عليك إتمام طلب أولاً للحصول على إمكانية استخدام نظام النمو.');
+      } else {
+        setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
+        setShowExhaustedState(true);
+      }
+      return;
+    }
+    
+    // Check if customer is individually blocked
+    if (!CustomerGrowthUtils.getCustomerStatus(email).isEnabled) {
+      setError('تم تعطيل نظام النمو لحسابك من قبل الإدارة. يرجى التواصل مع الدعم الفني.');
+      return;
+    }
+
+    // Generate report and consume usage
+    await generateReport();
+    
+    // Consume one usage after successful report generation
+    if (orderUsage.canUse) {
+      try {
+        // Check if this is custom code access (no enabled orders)
+        const isCustomCodeAccess = orderUsage.enabledOrders.length === 0 && hasCustomCodeAccess;
+        
+        console.log('🔍 Usage consumption check:', {
+          isCustomCodeAccess,
+          orderUsage,
+          hasCustomCodeAccess
+        });
+        
+        if (isCustomCodeAccess) {
+          // For custom code access, we need to record usage in the database
+          // Get the stored custom code from the separate state
+          const storedCustomCode = currentCustomCode;
+          
+          if (storedCustomCode) {
+            // Use the custom code (consume one usage)
+            const usageResult = await CustomCodeService.useCustomCode(
+              storedCustomCode.code,
+              email,
+              `Guest User ${Date.now()}`,
+              undefined,
+              undefined
+            );
+            
+            if (usageResult.success) {
+              // Update local state with new usage count
+              const newAvailableUsages = orderUsage.availableUsages - 1;
+              console.log('📊 Custom code usage consumed:', {
+                previous: orderUsage.availableUsages,
+                new: newAvailableUsages
+              });
+              
+              // Ensure usage doesn't go below 0
+              const finalUsages = Math.max(0, newAvailableUsages);
+              console.log('🔧 Setting custom code access:', {
+                finalUsages,
+                canUse: true,
+                willLockOnSubmit: finalUsages <= 0
+              });
+              setOrderBasedUsage({
+                ...orderUsage,
+                availableUsages: finalUsages,
+                canUse: true  // Always allow access for custom codes, even at 0
+              });
+            } else {
+              // Usage failed - show error
+              setError(usageResult.error || 'فشل في استخدام الكود المخصص');
+              return;
+            }
+          } else {
+            // Fallback to local usage tracking
+            const newAvailableUsages = orderUsage.availableUsages - 1;
+            const finalUsages = Math.max(0, newAvailableUsages);
+            setOrderBasedUsage({
+              ...orderUsage,
+              availableUsages: finalUsages,
+              canUse: true
+            });
+          }
+        } else {
+          // Regular order-based usage consumption
           const hasSupabaseData = orderUsage.enabledOrders.some(order => 
             order.orderId && typeof order.orderId === 'number'
           );
@@ -295,26 +404,12 @@ const GrowthSystemSection: React.FC = () => {
             // Update the local state immediately
             const updatedUsage = await checkCustomerOrderAccess(email);
             setOrderBasedUsage(updatedUsage);
-            
-            // Clear form for next child but preserve access and customer data
-            setFormData({
-              name: '',
-              gender: Gender.MALE,
-              age: '',
-              ageUnit: AgeUnit.MONTHS,
-              weight: '',
-              height: '',
-            });
-            // Keep the report visible so user can see the results
-            
-            // Don't lock immediately when reaching 0 - let user see they have 0 remaining
-            // The lock will happen when they try to use again (checked at form submission)
           } else {
             // Could not consume usage - user tried to use at 0 usages
             setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
             setShowExhaustedState(true);
             
-            // Clear form data when user tries to use at 0 usages
+            // For order-based usage, clear everything when exhausted
             setFormData({
               name: '',
               gender: Gender.MALE,
@@ -326,53 +421,37 @@ const GrowthSystemSection: React.FC = () => {
             setReport(null);
             setCustomerEmail('');
             setOrderBasedUsage({ canUse: false, availableUsages: 0, enabledOrders: [] });
-          }
-        } catch (error) {
-          console.error('Error recording usage:', error);
-          // Fallback to local system
-          const usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
-          if (usageConsumed) {
-            const updatedUsage = await checkCustomerOrderAccess(email);
-            setOrderBasedUsage(updatedUsage);
-            
-            // Clear form for next child but preserve access and customer data
-            setFormData({
-              name: '',
-              gender: Gender.MALE,
-              age: '',
-              ageUnit: AgeUnit.MONTHS,
-              weight: '',
-              height: '',
-            });
-            
-            // Don't lock immediately when reaching 0 - let user see they have 0 remaining
-            // The lock will happen when they try to use again (checked at form submission)
-          } else {
-            // Could not consume usage - user tried to use at 0 usages (fallback case)
-            setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
-            setShowExhaustedState(true);
-            
-            // Clear form data when user tries to use at 0 usages
-            setFormData({
-              name: '',
-              gender: Gender.MALE,
-              age: '',
-              ageUnit: AgeUnit.MONTHS,
-              weight: '',
-              height: '',
-            });
-            setReport(null);
-            setCustomerEmail('');
-            setOrderBasedUsage({ canUse: false, availableUsages: 0, enabledOrders: [] });
+            setCurrentCustomCode(null);
           }
         }
-      } else {
-      PurchaseUtils.useGrowthSystem();
+      } catch (error) {
+        console.error('Error recording usage:', error);
+        // Fallback to local system
+        const usageConsumed = OrderGrowthUtils.useGrowthSystemForCustomer(email);
+        if (usageConsumed) {
+          const updatedUsage = await checkCustomerOrderAccess(email);
+          setOrderBasedUsage(updatedUsage);
+        } else {
+          // Could not consume usage - user tried to use at 0 usages (fallback case)
+          setError('لقد استنفدت جميع استخداماتك المتاحة. يرجى طلب المزيد من المنتجات للحصول على استخدامات إضافية.');
+          setShowExhaustedState(true);
+          
+          // For order-based usage, clear everything when exhausted (fallback case)
+          setFormData({
+            name: '',
+            gender: Gender.MALE,
+            age: '',
+            ageUnit: AgeUnit.MONTHS,
+            weight: '',
+            height: '',
+          });
+          setReport(null);
+          setCustomerEmail('');
+          setOrderBasedUsage({ canUse: false, availableUsages: 0, enabledOrders: [] });
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      PurchaseUtils.useGrowthSystem();
     }
   };
   
@@ -382,19 +461,22 @@ const GrowthSystemSection: React.FC = () => {
     setError(null);
     setIsLoading(false);
     setShowExhaustedState(false);
+    setCurrentCustomCode(null); // Clear custom code on reset
     
     // DON'T clear form data - let user continue with the same session
     // DON'T clear customerEmail or orderBasedUsage - preserve access
     
-    // Refresh usage stats to show current remaining usages
-    if (customerEmail) {
+    // For custom code access, don't refresh from database (preserve local state)
+    // For order-based access, refresh usage stats to show current remaining usages
+    if (customerEmail && orderBasedUsage.enabledOrders.length > 0) {
       checkCustomerOrderAccess(customerEmail).then(updatedUsage => {
         setOrderBasedUsage(updatedUsage);
       });
     }
+    // If it's custom code access (no enabled orders), keep the current state
   }
 
-  const handleOrderCheck = async () => {
+  const handleOrderOrCodeCheck = async () => {
     setOrderCheckError('');
     
     if (!orderNumber.trim()) {
@@ -403,7 +485,83 @@ const GrowthSystemSection: React.FC = () => {
     }
 
     try {
-      // Check if this order number exists and is enabled for Growth System
+      // First, check if this is a custom code
+      const customCode = await CustomCodeService.getCustomCodeByCode(orderNumber.trim());
+      
+      if (customCode) {
+        // Check if the code is already exhausted before trying to use it
+        console.log('🔍 Pre-validation check:', {
+          code: orderNumber.trim(),
+          current_usage: customCode.current_usage,
+          max_usage: customCode.max_usage,
+          isExhausted: customCode.current_usage >= customCode.max_usage
+        });
+        
+        if (customCode.current_usage >= customCode.max_usage) {
+          console.log('❌ Code is exhausted, preventing usage');
+          setOrderCheckError('تم استنفاذ عدد مرات استخدام الكود');
+          return;
+        }
+        
+        // This is a custom code, validate it (without using it)
+        const customCodeResult = await CustomCodeService.validateCustomCode(
+          orderNumber.trim()
+        );
+        
+        if (customCodeResult.success) {
+          // Custom code is valid and has been used
+          setOrderCheckError('');
+          
+          // Calculate remaining usages BEFORE the usage was incremented
+          // The customCode object from the initial check has the original usage count
+          const remainingUsages = customCode ? 
+            (customCode.max_usage - customCode.current_usage) : 1;
+          
+          console.log('🔍 Custom code activation:', {
+            originalCode: customCode,
+            updatedCode: customCodeResult.data?.code,
+            remainingUsages,
+            maxUsage: customCode?.max_usage,
+            originalCurrentUsage: customCode?.current_usage,
+            updatedCurrentUsage: customCodeResult.data?.code?.current_usage
+          });
+          
+          alert(`✅ تم تفعيل الكود المخصص بنجاح! يمكنك الآن استخدام نظام النمو (${remainingUsages} استخدام متاح)`);
+          
+          // Set customer email and update access
+          setCustomerEmail(`guest_user_${Date.now()}@temp.com`);
+          setOrderBasedUsage({
+            canUse: true,
+            availableUsages: remainingUsages, // Use actual remaining usages from custom code
+            enabledOrders: []
+          });
+          setCurrentCustomCode(customCode); // Store the custom code for later usage
+          
+          // Ensure exhausted state is reset when we have valid access
+          if (remainingUsages > 0) {
+            setShowExhaustedState(false);
+          }
+          
+          // Reset states
+          console.log('🔄 Resetting states after custom code activation');
+          setShowExhaustedState(false);
+          setError(null);
+          setOrderNumber(''); // Clear the code after successful use
+          
+          // Force a re-render to ensure state is updated
+          setTimeout(() => {
+            console.log('🔄 Forcing state update after custom code activation');
+            setShowExhaustedState(false);
+          }, 100);
+          
+          return;
+        } else {
+          setOrderCheckError(customCodeResult.error || 'الكود غير صحيح');
+          return;
+        }
+      }
+
+      // If not a custom code, check if this order number exists and is enabled for Growth System
       // Check both Supabase and local data
       // Get Supabase enabled orders
       const supabaseOrders = await OrderSupabaseService.getEnabledOrders();
@@ -508,7 +666,7 @@ const GrowthSystemSection: React.FC = () => {
               {/* Order Number Check */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-6">
                 <p className="text-blue-800 font-semibold text-xs md:text-sm mb-3">
-                  🔍 تحقق من رقم طلبك لفتح النظام
+                  🔍 تحقق من رقم طلبك أو الكود المخصص لفتح النظام
                 </p>
                 <div className="space-y-3">
                   <div>
@@ -516,7 +674,7 @@ const GrowthSystemSection: React.FC = () => {
                       type="text"
                       value={orderNumber}
                       onChange={(e) => setOrderNumber(e.target.value)}
-                      placeholder="أدخل رقم الطلب (مثال: WC-1234)"
+                      placeholder="أدخل رقم الطلب أو الكود المخصص (مثال: WC-1234 أو ZM2020)"
                       className="w-full p-2 text-sm border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       dir="ltr"
                     />
@@ -527,10 +685,10 @@ const GrowthSystemSection: React.FC = () => {
                     </div>
                   )}
                   <button
-                    onClick={handleOrderCheck}
+                    onClick={handleOrderOrCodeCheck}
                     className="w-full bg-blue-600 text-white text-sm py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
                   >
-                    تحقق من الطلب
+                    تحقق من الطلب/الكود
                   </button>
                   <div className="text-xs text-blue-600 text-center">
 
@@ -602,6 +760,13 @@ const GrowthSystemSection: React.FC = () => {
   const hasAccess = hasPurchased || orderBasedUsage.canUse;
   
   // Show exhausted state if user has tried to use beyond available usages
+  console.log('🔍 Render condition check:', {
+    hasAccess,
+    orderBasedUsageCanUse: orderBasedUsage.canUse,
+    showExhaustedState,
+    orderBasedUsage
+  });
+  
   if (hasAccess && orderBasedUsage.canUse && showExhaustedState) {
     return (
       <section className="py-12 md:py-20 px-4 bg-gradient-to-br from-red-50 to-orange-50 relative overflow-hidden" dir="rtl">
@@ -631,14 +796,14 @@ const GrowthSystemSection: React.FC = () => {
               {/* Order number input for additional access */}
               <div className="mb-6">
                 <p className="text-gray-700 text-sm mb-3">
-                  لديك طلب آخر؟ أدخل رقم الطلب للحصول على استخدامات إضافية:
+                  لديك طلب آخر أو كود مخصص؟ أدخل رقم الطلب أو الكود للحصول على استخدامات إضافية:
                 </p>
                 <div className="space-y-3">
                   <input
                     type="text"
                     value={orderNumber}
                     onChange={(e) => setOrderNumber(e.target.value)}
-                    placeholder="أدخل رقم الطلب (مثال: WC-1234)"
+                    placeholder="أدخل رقم الطلب أو الكود المخصص (مثال: WC-1234 أو ZM2020)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
                     dir="ltr"
                   />
@@ -646,11 +811,11 @@ const GrowthSystemSection: React.FC = () => {
                     <p className="text-red-600 text-sm">{orderCheckError}</p>
                   )}
                   <button
-                    onClick={handleOrderCheck}
+                    onClick={handleOrderOrCodeCheck}
                     disabled={!orderNumber.trim()}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-lg transition-colors"
                   >
-                    تحقق من الطلب
+                    تحقق من الطلب/الكود
                   </button>
                 </div>
               </div>
@@ -739,7 +904,7 @@ const GrowthSystemSection: React.FC = () => {
               {/* Order Number Check for no purchase */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-6">
                 <p className="text-blue-800 font-semibold text-xs md:text-sm mb-3">
-                  🔍 هل لديك طلب سابق؟ تحقق من رقم طلبك
+                  🔍 هل لديك طلب سابق أو كود مخصص؟ تحقق من رقم طلبك أو الكود
                 </p>
                 <div className="space-y-3">
                   <div>
@@ -747,7 +912,7 @@ const GrowthSystemSection: React.FC = () => {
                       type="text"
                       value={orderNumber}
                       onChange={(e) => setOrderNumber(e.target.value)}
-                      placeholder="أدخل رقم الطلب (مثال: WC-1234)"
+                      placeholder="أدخل رقم الطلب أو الكود المخصص (مثال: WC-1234 أو ZM2020)"
                       className="w-full p-2 text-sm border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       dir="ltr"
                     />
@@ -758,10 +923,10 @@ const GrowthSystemSection: React.FC = () => {
                     </div>
                   )}
                   <button
-                    onClick={handleOrderCheck}
+                    onClick={handleOrderOrCodeCheck}
                     className="w-full bg-blue-600 text-white text-sm py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
                   >
-                    تحقق من الطلب
+                    تحقق من الطلب/الكود
                   </button>
                   <div className="text-xs text-blue-600 text-center">
 
@@ -939,17 +1104,20 @@ const GrowthSystemSection: React.FC = () => {
             {orderBasedUsage.canUse ? (
               <>
                 <p className="text-blue-800 font-semibold text-sm">
-                  📊 الاستخدامات المتاحة: {orderBasedUsage.availableUsages} من طلباتك المكتملة
+                  📊 الاستخدامات المتاحة: {orderBasedUsage.availableUsages} 
+                  {orderBasedUsage.enabledOrders.length > 0 ? ' من طلباتك المكتملة' : ' من الكود المخصص'}
                 </p>
                 <p className="text-blue-700 text-xs mt-1">
                   {orderBasedUsage.availableUsages > 0 
-                    ? `يمكنك استخدام النظام ${orderBasedUsage.availableUsages} مرة أخرى من طلباتك المكتملة` 
+                    ? `يمكنك استخدام النظام ${orderBasedUsage.availableUsages} مرة أخرى` 
                     : 'لا توجد استخدامات متبقية - اطلب المزيد للحصول على استخدامات إضافية'
                   }
                 </p>
-                <p className="text-blue-600 text-xs mt-1">
-                  طلبات مُفعلة: {orderBasedUsage.enabledOrders.length}
-                </p>
+                {orderBasedUsage.enabledOrders.length > 0 && (
+                  <p className="text-blue-600 text-xs mt-1">
+                    طلبات مُفعلة: {orderBasedUsage.enabledOrders.length}
+                  </p>
+                )}
               </>
             ) : (
               <>

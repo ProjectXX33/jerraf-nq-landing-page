@@ -4,6 +4,7 @@ import { CustomerGrowthUtils } from '../utils/customerGrowthUtils';
 import { OrderGrowthUtils } from '../utils/orderGrowthUtils';
 import { OrderSupabaseService } from '../services/orderSupabaseService';
 import { wooCommerceService } from '../services/woocommerceService';
+import { CustomCodeService, CustomCode, CustomCodeStatistics } from '../services/customCodeService';
 import { useGrowthSystem, formatTimeRemaining } from '../contexts/GrowthSystemContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -26,7 +27,11 @@ import {
   Users,
   UserX,
   Edit3,
-  Trash2
+  Trash2,
+  Code,
+  Plus,
+  Copy,
+  Calendar
 } from 'lucide-react';
 
 interface Order {
@@ -65,7 +70,7 @@ const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState('');
-  const [activeTab, setActiveTab] = useState<'orders' | 'customers'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'codes'>('orders');
   const [customerGrowthStats, setCustomerGrowthStats] = useState(CustomerGrowthUtils.getStatistics());
   const [onlyFormOrders, setOnlyFormOrders] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
@@ -75,6 +80,27 @@ const AdminDashboard: React.FC = () => {
   });
   const [orderGrowthStats, setOrderGrowthStats] = useState(OrderGrowthUtils.getStatistics());
   const [supabaseOrderAccess, setSupabaseOrderAccess] = useState<Record<number, any>>({});
+  
+  // Custom Codes state
+  const [customCodes, setCustomCodes] = useState<CustomCode[]>([]);
+  const [customCodeStats, setCustomCodeStats] = useState<CustomCodeStatistics>({
+    total_codes: 0,
+    active_codes: 0,
+    inactive_codes: 0,
+    expired_codes: 0,
+    total_max_usage: 0,
+    total_current_usage: 0,
+    created_this_month: 0
+  });
+  const [isLoadingCodes, setIsLoadingCodes] = useState(false);
+  const [showCreateCodeModal, setShowCreateCodeModal] = useState(false);
+  const [newCode, setNewCode] = useState({
+    code: '',
+    description: '',
+    maxUsage: 1,
+    expiresAt: '',
+    isActive: true
+  });
   
   // Get real-time values from context
   const isLoggedIn = growthSettings.isAdminLoggedIn;
@@ -156,6 +182,7 @@ const AdminDashboard: React.FC = () => {
     if (isLoggedIn) {
       loadOrders();
       loadOrderAccessData();
+      loadCustomCodes();
     }
   }, [isLoggedIn, onlyFormOrders]);
 
@@ -336,6 +363,87 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Custom Codes functions
+  const loadCustomCodes = async () => {
+    setIsLoadingCodes(true);
+    try {
+      const [codes, stats] = await Promise.all([
+        CustomCodeService.getAllCustomCodes(),
+        CustomCodeService.getStatistics()
+      ]);
+      setCustomCodes(codes);
+      setCustomCodeStats(stats);
+    } catch (error) {
+      console.error('Error loading custom codes:', error);
+    } finally {
+      setIsLoadingCodes(false);
+    }
+  };
+
+  const handleCreateCustomCode = async () => {
+    try {
+      const result = await CustomCodeService.createCustomCode(
+        newCode.code || CustomCodeService.generateRandomCode(),
+        newCode.description,
+        newCode.maxUsage,
+        newCode.expiresAt ? new Date(newCode.expiresAt) : undefined,
+        'admin'
+      );
+
+      if (result.success) {
+        setShowCreateCodeModal(false);
+        setNewCode({
+          code: '',
+          description: '',
+          maxUsage: 1,
+          expiresAt: '',
+          isActive: true
+        });
+        await loadCustomCodes();
+      } else {
+        alert('فشل في إنشاء الكود: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error creating custom code:', error);
+      alert('فشل في إنشاء الكود');
+    }
+  };
+
+  const handleUpdateCustomCode = async (id: string, updates: Partial<CustomCode>) => {
+    try {
+      const result = await CustomCodeService.updateCustomCode(id, updates);
+      if (result.success) {
+        await loadCustomCodes();
+      } else {
+        alert('فشل في تحديث الكود: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error updating custom code:', error);
+      alert('فشل في تحديث الكود');
+    }
+  };
+
+  const handleDeleteCustomCode = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الكود؟')) return;
+    
+    try {
+      const result = await CustomCodeService.deleteCustomCode(id);
+      if (result.success) {
+        await loadCustomCodes();
+      } else {
+        alert('فشل في حذف الكود: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error deleting custom code:', error);
+      alert('فشل في حذف الكود');
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    // You could add a toast notification here
+  };
+
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: any }> = {
       pending: { label: 'في الانتظار', variant: 'destructive' },
@@ -352,7 +460,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ar-SA', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -591,6 +699,14 @@ const AdminDashboard: React.FC = () => {
                 >
                   <Users className="w-4 h-4" />
                   العملاء ({customerGrowthStats.totalCustomers})
+                </Button>
+                <Button
+                  variant={activeTab === 'codes' ? 'default' : 'outline'}
+                  onClick={() => setActiveTab('codes')}
+                  className="flex items-center gap-2"
+                >
+                  <Code className="w-4 h-4" />
+                  الأكواد ({customCodeStats.total_codes})
                 </Button>
               </div>
               <div className="flex items-center gap-2">
@@ -876,6 +992,151 @@ const AdminDashboard: React.FC = () => {
           </Card>
         )}
 
+        {/* Custom Codes Section */}
+        {activeTab === 'codes' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Code className="w-5 h-5" />
+                    إدارة الأكواد المخصصة
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">
+                    المُفعلة: {customCodeStats.active_codes} | 
+                    المُعطلة: {customCodeStats.inactive_codes} | 
+                    منتهية الصلاحية: {customCodeStats.expired_codes} |
+                    الإجمالي: {customCodeStats.total_codes}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={loadCustomCodes}
+                    disabled={isLoadingCodes}
+                    variant="outline"
+                  >
+                    <RefreshCw className={`w-4 h-4 ml-2 ${isLoadingCodes ? 'animate-spin' : ''}`} />
+                    تحديث
+                  </Button>
+                  <Button 
+                    onClick={() => setShowCreateCodeModal(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    إنشاء كود جديد
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingCodes ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+                  <p>جاري تحميل الأكواد...</p>
+                </div>
+              ) : customCodes.length === 0 ? (
+                <div className="text-center py-8">
+                  <Code className="w-8 h-8 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-600">لا توجد أكواد مخصصة</p>
+                  <Button 
+                    onClick={() => setShowCreateCodeModal(true)}
+                    className="mt-4"
+                  >
+                    <Plus className="w-4 h-4 ml-2" />
+                    إنشاء أول كود
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {customCodes.map((code) => (
+                    <div
+                      key={code.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-mono text-lg font-bold">{code.code}</h3>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => copyToClipboard(code.code)}
+                              className="text-xs"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          {code.is_active ? (
+                            <Badge variant="default" className="bg-green-100 text-green-800">
+                              <CheckCircle className="w-3 h-3 ml-1" />
+                              مُفعل
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive">
+                              <Lock className="w-3 h-3 ml-1" />
+                              معطل
+                            </Badge>
+                          )}
+                          {code.expires_at && new Date(code.expires_at) < new Date() && (
+                            <Badge variant="secondary">
+                              <Calendar className="w-3 h-3 ml-1" />
+                              منتهي الصلاحية
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUpdateCustomCode(code.id, { is_active: !code.is_active })}
+                            className="text-xs"
+                          >
+                            {code.is_active ? (
+                              <>
+                                <Lock className="w-3 h-3 ml-1" />
+                                تعطيل
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-3 h-3 ml-1" />
+                                تفعيل
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteCustomCode(code.id)}
+                            className="text-xs"
+                          >
+                            <Trash2 className="w-3 h-3 ml-1" />
+                            حذف
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p><strong>الوصف:</strong> {code.description}</p>
+                          <p><strong>الاستخدامات:</strong> {code.current_usage}/{code.max_usage}</p>
+                          <p><strong>تاريخ الإنشاء:</strong> {formatDate(code.created_at)}</p>
+                        </div>
+                        <div>
+                          <p><strong>أنشأ بواسطة:</strong> {code.created_by}</p>
+                          {code.expires_at && (
+                            <p><strong>تاريخ الانتهاء:</strong> {formatDate(code.expires_at)}</p>
+                          )}
+                          <p><strong>آخر تحديث:</strong> {formatDate(code.updated_at)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Customer Action Modal */}
         {selectedCustomer && (
           <Card className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -919,6 +1180,71 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </Card>
+        )}
+
+        {/* Create Custom Code Modal */}
+        {showCreateCodeModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold mb-4">إنشاء كود مخصص جديد</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="code">الكود (اختياري - سيتم إنشاؤه تلقائياً)</Label>
+                  <Input
+                    id="code"
+                    value={newCode.code}
+                    onChange={(e) => setNewCode(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                    placeholder="مثال: PROMO2024"
+                    className="font-mono"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">الوصف</Label>
+                  <Input
+                    id="description"
+                    value={newCode.description}
+                    onChange={(e) => setNewCode(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="وصف الكود والغرض منه"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="maxUsage">عدد مرات الاستخدام</Label>
+                  <Input
+                    id="maxUsage"
+                    type="number"
+                    min="1"
+                    value={newCode.maxUsage}
+                    onChange={(e) => setNewCode(prev => ({ ...prev, maxUsage: parseInt(e.target.value) || 1 }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="expiresAt">تاريخ انتهاء الصلاحية (اختياري)</Label>
+                  <Input
+                    id="expiresAt"
+                    type="datetime-local"
+                    value={newCode.expiresAt}
+                    onChange={(e) => setNewCode(prev => ({ ...prev, expiresAt: e.target.value }))}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleCreateCustomCode}
+                    disabled={!newCode.description.trim()}
+                    className="flex-1"
+                  >
+                    <Plus className="w-4 h-4 ml-2" />
+                    إنشاء الكود
+                  </Button>
+                  <Button
+                    onClick={() => setShowCreateCodeModal(false)}
+                    variant="outline"
+                  >
+                    إلغاء
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
